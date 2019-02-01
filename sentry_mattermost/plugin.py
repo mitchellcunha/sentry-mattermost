@@ -29,26 +29,12 @@ from sentry.plugins.bases import notify
 
 import sentry_mattermost
 
-
-def get_project_full_name(project):
-    if project.team.name not in project.name:
-        return '%s %s' % (project.team.name, project.name)
-    return project.name
-
-
-def get_rules(notification, group, project):
-    rules = []
-    for rule in notification.rules:
-        rules.append(rule.label.encode('utf-8'))
-    return ', '.join('%s' % r for r in rules)
-
-
 def get_tags(event):
     tag_list = event.get_tags()
     if not tag_list:
         return ()
 
-    return ((tagstore.get_tag_key_label(k), tagstore.get_tag_value_label(k, v)) 
+    return ((tagstore.get_tag_key_label(k), tagstore.get_tag_value_label(k, v))
             for k, v in tag_list)
 
 
@@ -56,6 +42,11 @@ class PayloadFactory:
     @classmethod
     def render_text(cls, params):
         template = "__{project}__\n__[{title}]({link})__ \n{culprit}\n"
+        if params['tags']:
+            template_addition = "Tags: "
+            for tag in params['tags']:
+                template_addition = template_addition + ' ' + tag[0] + '=' + tag[1] + '   '
+            template = template + template_addition
         return template.format(**params)
 
     @classmethod
@@ -68,11 +59,8 @@ class PayloadFactory:
             "title": group.message_short.encode('utf-8'),
             "link": group.get_absolute_url(),
             "culprit": group.culprit.encode('utf-8'),
-            "project": get_project_full_name(project).encode('utf-8')
+            "project": project,
         }
-
-        if plugin.get_option('include_rules', project):
-            params["rules"] = get_rules(notification, group, project)
 
         if plugin.get_option('include_tags', project):
             params["tags"] = get_tags(event)
@@ -81,6 +69,7 @@ class PayloadFactory:
 
         payload = {
             "username": "Sentry",
+            "channel": plugin.get_option('channel_name', project),
             "icon_url": "https://myovchev.github.io/sentry-slack/images/logo32.png", #noqa
             "text": text
         }
@@ -99,8 +88,9 @@ class MattermostOptionsForm(notify.NotificationConfigurationForm):
         help_text='Incoming Webhook URL',
         widget=forms.URLInput(attrs={'class': 'span8'})
     )
-    include_rules = forms.BooleanField(
-        help_text='Include triggering rules with notifications',
+    channel_name = forms.CharField(
+        widget=forms.TextInput(attrs={'[class]': 'span8', 'placeholder': '#alerts'}),
+        help_text='Channel Name',
         required=False,
     )
     include_tags = forms.BooleanField(

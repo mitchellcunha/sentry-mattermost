@@ -31,3 +31,7 @@ Each time you update the code, restart the containers:
 And access the sentry admin at
 
     http://<DOCKER IP>:8081
+
+
+### Note
+The instructions listed above are out of date and need updating.
